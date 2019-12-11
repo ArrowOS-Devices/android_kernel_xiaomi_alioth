@@ -832,6 +832,7 @@ int mhi_arch_link_resume(struct mhi_controller *mhi_cntrl)
 
 	if (!ret)
 		msm_pcie_l1ss_timeout_enable(pci_dev);
+	mhi_cntrl->force_m3_done = true;
 
 #ifdef CONFIG_MACH_XIAOMI_SM8250
 	mhi_cntrl->force_m3_done = true;
