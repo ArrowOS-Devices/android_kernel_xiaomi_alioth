@@ -271,9 +271,7 @@ ifeq ($(KERNEL_BUILD), 0)
 KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/ipc/Module.symvers
 endif
 
-ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT),lmi lmiin lmiinpro cas umi cmi apollo alioth thyme))
-	CDEFINES += -DAUDIO_SM8250_FLAG
-endif
+CDEFINES += -DAUDIO_SM8250_FLAG
 
 ifeq ($(KERNEL_BUILD), 1)
 	obj-y += codecs/

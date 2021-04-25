@@ -229,9 +229,7 @@ ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT),lmi lmiin lmiinpro))
 CDEFINES += -DTFA_ADSP_SUPPORTED
 endif
 
-ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT),lmi lmiin lmiinpro cas umi cmi apollo alioth thyme))
 CDEFINES += -DAUDIO_SM8250_FLAG
-endif
 
 ifeq ($(TARGET_PRODUCT), $(filter $(TARGET_PRODUCT), picasso picassoin monet vangogh))
 CDEFINES += -DAUDIO_SM7250_FLAG
@@ -249,9 +247,7 @@ ifeq ($(TARGET_PRODUCT), cas)
 		CDEFINES += -DCONFIG_TARGET_PRODUCT_CAS
 endif
 
-ifeq ($(TARGET_PRODUCT), alioth)
-		CDEFINES += -DCONFIG_TARGET_PRODUCT_ALIOTH
-endif
+CDEFINES += -DCONFIG_TARGET_PRODUCT_ALIOTH
 
 ifeq ($(TARGET_PRODUCT), thyme)
                 CDEFINES += -DCONFIG_TARGET_PRODUCT_THYME
