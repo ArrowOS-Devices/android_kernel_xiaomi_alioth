@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -16,31 +16,31 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-/**
- * DOC: i_qdf_talloc.h
- *
- * Linux-specific definitions for use by QDF talloc APIs
- */
+#include <linux/string.h>
+#include <qdf_func_tracker.h>
+#include <qdf_mem.h>
 
-#ifndef __I_QDF_TALLOC_H
-#define __I_QDF_TALLOC_H
+#ifdef FUNC_CALL_MAP
+char qdf_func_call_map_buf[QDF_FUNCTION_CALL_MAP_BUF_LEN] = {0};
 
-#include "asm/page.h"
-#include "linux/irqflags.h"
-#include "linux/preempt.h"
-#include "linux/slab.h"
+void cc_func(unsigned int track)
+{
+	unsigned int index = 0;
+	unsigned int bit = 0;
 
-#define __can_sleep() \
-	(!in_interrupt() && !irqs_disabled() && !in_atomic())
+	index = track / 8;
+	bit = track % 8;
+	qdf_func_call_map_buf[index] |= (char)(1 << bit);
+}
 
-#define __zalloc_sleeps(size) kzalloc(size, GFP_KERNEL)
-#define __zalloc_atomic(size) kzalloc(size, GFP_ATOMIC)
-#define __zalloc_auto(size) \
-	kzalloc(size, __can_sleep() ? GFP_KERNEL : GFP_ATOMIC)
+void qdf_get_func_call_map(char *data)
+{
+	qdf_mem_copy(data, qdf_func_call_map_buf,
+		     QDF_FUNCTION_CALL_MAP_BUF_LEN);
+}
 
-#define __free(ptr) kfree(ptr)
-
-#define __alloc_size(ptr) ksize(ptr)
-
-#endif /* __I_QDF_TALLOC_H */
-
+void qdf_clear_func_call_map(void)
+{
+	qdf_mem_zero(qdf_func_call_map_buf, QDF_FUNCTION_CALL_MAP_BUF_LEN);
+}
+#endif
