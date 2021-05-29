@@ -1784,6 +1784,7 @@ QDF_STATUS sme_set_ese_roam_scan_channel_list(mac_handle_t mac_handle,
 	uint8_t newChannelList[CFG_VALID_CHANNEL_LIST_LEN * 5] = { 0 };
 	uint8_t i = 0, j = 0;
 	enum band_info band = -1;
+	uint32_t band_bitmap;
 
 	if (sessionId >= WLAN_MAX_VDEVS) {
 		QDF_TRACE(QDF_MODULE_ID_SME, QDF_TRACE_LEVEL_ERROR,
@@ -1806,7 +1807,8 @@ QDF_STATUS sme_set_ese_roam_scan_channel_list(mac_handle_t mac_handle,
 				curchnl_list_info->freq_list[i]);
 		}
 	}
-        ucfg_reg_get_band(mac->pdev, &band);
+	ucfg_reg_get_band(mac->pdev, &band_bitmap);
+	band = wlan_reg_band_bitmap_to_band_info(band_bitmap);
 	status = csr_create_roam_scan_channel_list(mac, sessionId,
 				chan_freq_list, numChannels,
 				band);
@@ -1971,7 +1973,7 @@ static QDF_STATUS sme_process_dual_mac_config_resp(struct mac_context *mac,
 			sme_err("Callback failed-Dual mac config is NULL");
 		} else {
 			sme_debug("Calling HDD callback for Dual mac config");
-			callback(mac->psoc, param->status,
+			callback(param->status,
 				command->u.set_dual_mac_cmd.scan_config,
 				command->u.set_dual_mac_cmd.fw_mode_config);
 		}
@@ -5328,45 +5330,6 @@ sme_handle_generic_change_country_code(struct mac_context *mac_ctx,
 				       void *msg_buf)
 {
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
-	v_REGDOMAIN_t reg_domain_id = 0;
-	bool user_ctry_priority =
-		mac_ctx->mlme_cfg->sap_cfg.country_code_priority;
-	tAniGenericChangeCountryCodeReq *msg = msg_buf;
-
-	if (SOURCE_11D != mac_ctx->reg_hint_src) {
-		if (SOURCE_DRIVER != mac_ctx->reg_hint_src) {
-			if (user_ctry_priority)
-				mac_ctx->mlme_cfg->gen.enabled_11d = false;
-			else {
-				if (mac_ctx->mlme_cfg->gen.enabled_11d &&
-				    mac_ctx->scan.countryCode11d[0] != 0) {
-
-					sme_debug("restore 11d");
-
-					status =
-					csr_get_regulatory_domain_for_country(
-						mac_ctx,
-						mac_ctx->scan.countryCode11d,
-						&reg_domain_id,
-						SOURCE_11D);
-					return QDF_STATUS_E_FAILURE;
-				}
-			}
-		}
-	} else {
-		/* if kernel gets invalid country code; it
-		 *  resets the country code to world
-		 */
-		if (('0' != msg->countryCode[0]) ||
-		    ('0' != msg->countryCode[1]))
-			qdf_mem_copy(mac_ctx->scan.countryCode11d,
-				     msg->countryCode,
-				     CFG_COUNTRY_CODE_LEN);
-	}
-
-	qdf_mem_copy(mac_ctx->scan.countryCodeCurrent,
-		     msg->countryCode,
-		     CFG_COUNTRY_CODE_LEN);
 
 	/* get the channels based on new cc */
 	status = csr_get_channel_and_power_list(mac_ctx);
@@ -5376,20 +5339,13 @@ sme_handle_generic_change_country_code(struct mac_context *mac_ctx,
 		return status;
 	}
 
+	sme_disconnect_connected_sessions(mac_ctx,
+					  eSIR_MAC_UNSPEC_FAILURE_REASON);
+
 	/* reset info based on new cc, and we are done */
 	csr_apply_channel_power_info_wrapper(mac_ctx);
 
 	csr_scan_filter_results(mac_ctx);
-
-	/* scans after the country is set by User hints or
-	 * Country IE
-	 */
-	mac_ctx->scan.curScanType = eSIR_ACTIVE_SCAN;
-
-	mac_ctx->reg_hint_src = SOURCE_UNKNOWN;
-
-	sme_disconnect_connected_sessions(mac_ctx,
-					  eSIR_MAC_UNSPEC_FAILURE_REASON);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -7617,23 +7573,23 @@ sme_update_roam_scan_freq_list(mac_handle_t mac_handle, uint8_t vdev_id,
 	}
 
 	neighbor_roam_info = &mac->roam.neighborRoamInfo[vdev_id];
-	if (neighbor_roam_info->cfgParams.specific_chan_info.numOfChannels) {
+	if (neighbor_roam_info->cfgParams.specific_chan_info.numOfChannels &&
+	    freq_list_type == QCA_PREFERRED_SCAN_FREQ_LIST) {
 		sme_err("Specific channel list is already configured");
 		sme_release_global_lock(&mac->sme);
 		return QDF_STATUS_E_INVAL;
 	}
 
+	sme_debug("frequency list type %d", freq_list_type);
 	if (freq_list_type == QCA_PREFERRED_SCAN_FREQ_LIST) {
-		sme_debug("Preferred frequency list: ");
 		channel_info = &neighbor_roam_info->cfgParams.pref_chan_info;
+		status = sme_update_roam_scan_channel_list(
+					mac_handle, vdev_id, channel_info,
+					freq_list, num_chan);
 	} else {
-		goto out;
+		status = sme_change_roam_scan_channel_list(mac_handle, vdev_id,
+							   freq_list, num_chan);
 	}
-
-	status = sme_update_roam_scan_channel_list(mac_handle, vdev_id,
-						   channel_info, freq_list,
-						   num_chan);
-out:
 	sme_release_global_lock(&mac->sme);
 
 	return status;
@@ -11531,6 +11487,7 @@ void sme_update_he_cap_nss(mac_handle_t mac_handle, uint8_t session_id,
 
 	if (!nss || (nss > 2)) {
 		sme_err("invalid Nss value %d", nss);
+		return;
 	}
 	csr_session = CSR_GET_SESSION(mac_ctx, session_id);
 	if (!csr_session) {
@@ -12570,10 +12527,10 @@ QDF_STATUS sme_soc_set_dual_mac_config(struct policy_mgr_dual_mac_config msg)
 	sme_debug("set_dual_mac_config scan_config: %x fw_mode_config: %x",
 		cmd->u.set_dual_mac_cmd.scan_config,
 		cmd->u.set_dual_mac_cmd.fw_mode_config);
-	csr_queue_sme_command(mac, cmd, false);
+	status = csr_queue_sme_command(mac, cmd, false);
 
 	sme_release_global_lock(&mac->sme);
-	return QDF_STATUS_SUCCESS;
+	return status;
 }
 
 #ifdef FEATURE_LFR_SUBNET_DETECTION
@@ -13291,6 +13248,21 @@ QDF_STATUS sme_delete_mon_session(mac_handle_t mac_handle, uint8_t vdev_id)
 	return status;
 }
 
+void
+sme_set_del_peers_ind_callback(mac_handle_t mac_handle,
+			       void (*callback)(struct wlan_objmgr_psoc *psoc,
+						uint8_t vdev_id))
+{
+	struct mac_context *mac;
+
+	if (!mac_handle) {
+		QDF_ASSERT(0);
+		return;
+	}
+	mac = MAC_CONTEXT(mac_handle);
+	mac->del_peers_ind_cb = callback;
+}
+
 void sme_set_chan_info_callback(mac_handle_t mac_handle,
 			void (*callback)(struct scan_chan_info *chan_info))
 {
@@ -13304,27 +13276,28 @@ void sme_set_chan_info_callback(mac_handle_t mac_handle,
 	mac->chan_info_cb = callback;
 }
 
-/**
- * sme_set_vdev_ies_per_band() - sends the per band IEs to vdev
- * @mac_handle: Opaque handle to the global MAC context
- * @vdev_id: vdev_id for which IE is targeted
- *
- * Return: None
- */
-void sme_set_vdev_ies_per_band(mac_handle_t mac_handle, uint8_t vdev_id)
+void sme_set_vdev_ies_per_band(mac_handle_t mac_handle, uint8_t vdev_id,
+			       enum QDF_OPMODE device_mode)
 {
 	struct sir_set_vdev_ies_per_band *p_msg;
 	QDF_STATUS status = QDF_STATUS_E_FAILURE;
+	struct mac_context *mac_ctx = MAC_CONTEXT(mac_handle);
+	enum csr_cfgdot11mode curr_dot11_mode =
+				mac_ctx->roam.configParam.uCfgDot11Mode;
 
 	p_msg = qdf_mem_malloc(sizeof(*p_msg));
 	if (!p_msg)
 		return;
 
+
 	p_msg->vdev_id = vdev_id;
+	p_msg->device_mode = device_mode;
+	p_msg->dot11_mode = csr_get_vdev_dot11_mode(mac_ctx, device_mode,
+						    curr_dot11_mode);
 	p_msg->msg_type = eWNI_SME_SET_VDEV_IES_PER_BAND;
 	p_msg->len = sizeof(*p_msg);
-	sme_debug("sending eWNI_SME_SET_VDEV_IES_PER_BAND: vdev_id: %d",
-		vdev_id);
+	sme_debug("SET_VDEV_IES_PER_BAND: vdev_id %d dot11mode %d dev_mode %d",
+		  vdev_id, p_msg->dot11_mode, device_mode);
 	status = umac_send_mb_message_to_mac(p_msg);
 	if (QDF_STATUS_SUCCESS != status)
 		sme_err("Send eWNI_SME_SET_VDEV_IES_PER_BAND fail");
@@ -15512,21 +15485,14 @@ void sme_update_score_config(mac_handle_t mac_handle,
 		mlme_scoring_cfg->oce_wan_scoring.score_pcnt15_to_12;
 }
 
-void sme_enable_fw_module_log_level(mac_handle_t mac_handle, int vdev_id)
+static void
+__sme_enable_fw_module_log_level(uint8_t *enable_fw_module_log_level,
+				 uint8_t enable_fw_module_log_level_num,
+				 int vdev_id, int param_id)
 {
-	QDF_STATUS status;
-	struct mac_context *mac_ctx = MAC_CONTEXT(mac_handle);
-	uint8_t *enable_fw_module_log_level;
-	uint8_t enable_fw_module_log_level_num;
 	uint8_t count = 0;
 	uint32_t value = 0;
 	int ret;
-
-	status = ucfg_fwol_get_enable_fw_module_log_level(
-			mac_ctx->psoc, &enable_fw_module_log_level,
-			&enable_fw_module_log_level_num);
-	if (QDF_IS_STATUS_ERROR(status))
-		return;
 
 	while (count < enable_fw_module_log_level_num) {
 		/*
@@ -15558,15 +15524,42 @@ void sme_enable_fw_module_log_level(mac_handle_t mac_handle, int vdev_id)
 
 		value = enable_fw_module_log_level[count] << 16;
 		value |= enable_fw_module_log_level[count + 1];
-		ret = sme_cli_set_command(vdev_id,
-					  WMI_DBGLOG_MOD_LOG_LEVEL,
-					  value, DBG_CMD);
+		ret = sme_cli_set_command(vdev_id, param_id, value, DBG_CMD);
 		if (ret != 0)
 			sme_err("Failed to enable FW module log level %d ret %d",
 				value, ret);
 
 		count += 2;
 	}
+}
+
+void sme_enable_fw_module_log_level(mac_handle_t mac_handle, int vdev_id)
+{
+	QDF_STATUS status;
+	struct mac_context *mac_ctx = MAC_CONTEXT(mac_handle);
+	uint8_t *enable_fw_module_log_level;
+	uint8_t enable_fw_module_log_level_num;
+
+	status = ucfg_fwol_get_enable_fw_module_log_level(
+			mac_ctx->psoc, &enable_fw_module_log_level,
+			&enable_fw_module_log_level_num);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+	__sme_enable_fw_module_log_level(enable_fw_module_log_level,
+					 enable_fw_module_log_level_num,
+					 vdev_id,
+					 WMI_DBGLOG_MOD_LOG_LEVEL);
+
+	enable_fw_module_log_level_num = 0;
+	status = ucfg_fwol_wow_get_enable_fw_module_log_level(
+			mac_ctx->psoc, &enable_fw_module_log_level,
+			&enable_fw_module_log_level_num);
+	if (QDF_IS_STATUS_ERROR(status))
+		return;
+	__sme_enable_fw_module_log_level(enable_fw_module_log_level,
+					 enable_fw_module_log_level_num,
+					 vdev_id,
+					 WMI_DBGLOG_MOD_WOW_LOG_LEVEL);
 }
 
 #ifdef WLAN_FEATURE_MOTION_DETECTION

@@ -187,7 +187,7 @@ QDF_STATUS wlan_mlme_set_ht_mpdu_density(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS wlan_mlme_get_band_capability(struct wlan_objmgr_psoc *psoc,
-					 uint8_t *band_capability)
+					 uint32_t *band_capability)
 {
 	struct wlan_mlme_psoc_ext_obj *mlme_obj;
 
@@ -201,7 +201,7 @@ QDF_STATUS wlan_mlme_get_band_capability(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS wlan_mlme_set_band_capability(struct wlan_objmgr_psoc *psoc,
-					 uint8_t band_capability)
+					 uint32_t band_capability)
 
 {
 	struct wlan_mlme_psoc_ext_obj *mlme_obj;
@@ -1668,6 +1668,20 @@ QDF_STATUS wlan_mlme_set_assoc_sta_limit(struct wlan_objmgr_psoc *psoc,
 		mlme_obj->cfg.sap_cfg.assoc_sta_limit = value;
 	else
 		return QDF_STATUS_E_FAILURE;
+
+	return QDF_STATUS_SUCCESS;
+}
+
+QDF_STATUS wlan_mlme_get_assoc_sta_limit(struct wlan_objmgr_psoc *psoc,
+					 int *value)
+{
+	struct wlan_mlme_psoc_ext_obj *mlme_obj;
+
+	mlme_obj = mlme_get_psoc_ext_obj(psoc);
+	if (!mlme_obj)
+		return QDF_STATUS_E_FAILURE;
+
+	*value = mlme_obj->cfg.sap_cfg.assoc_sta_limit;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3867,6 +3881,7 @@ bool wlan_mlme_get_peer_unmap_conf(struct wlan_objmgr_psoc *psoc)
 #define AUTH_INDEX 0
 #define MAX_RETRIES 2
 #define MAX_ROAM_AUTH_RETRIES 1
+#define MAX_AUTH_RETRIES 3
 
 QDF_STATUS
 wlan_mlme_get_sae_assoc_retry_count(struct wlan_objmgr_psoc *psoc,
@@ -3907,7 +3922,7 @@ wlan_mlme_get_sae_auth_retry_count(struct wlan_objmgr_psoc *psoc,
 		WLAN_GET_BITS(mlme_obj->cfg.gen.sae_connect_retries,
 			      AUTH_INDEX * NUM_RETRY_BITS, NUM_RETRY_BITS);
 
-	*retry_count = QDF_MIN(MAX_RETRIES, *retry_count);
+	*retry_count = QDF_MIN(MAX_AUTH_RETRIES, *retry_count);
 
 	return QDF_STATUS_SUCCESS;
 }
