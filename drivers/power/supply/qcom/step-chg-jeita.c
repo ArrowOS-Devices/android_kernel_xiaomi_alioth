@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "QCOM-STEPCHG: %s: " fmt, __func__
@@ -263,7 +263,7 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 	u32 max_fv_uv, max_fcc_ma;
 	const char *batt_type_str;
 	const __be32 *handle;
-	int batt_id_ohms, rc;
+	int batt_id_ohms, rc, hysteresis[2] = {0};
 	union power_supply_propval prop = {0, };
 
 	handle = of_get_property(chip->dev->of_node,
@@ -787,7 +787,6 @@ static int handle_fast_charge(struct step_chg_info *chip, int temp)
 
 	return rc;
 }
-
 
 /* set JEITA_SUSPEND_HYST_UV to 70mV to avoid recharge frequently when jeita warm */
 #define JEITA_SUSPEND_HYST_UV		120000
