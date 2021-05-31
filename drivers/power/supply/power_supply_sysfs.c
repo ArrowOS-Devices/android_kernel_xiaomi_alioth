@@ -19,6 +19,8 @@
 
 #include "power_supply.h"
 
+//#undef dev_dbg
+//#define dev_dbg  dev_err
 /*
  * This is because the name "current" breaks the device attr macro.
  * The "current" word resolves to "(get_current())" so instead of

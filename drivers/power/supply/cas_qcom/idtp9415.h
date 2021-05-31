@@ -191,7 +191,6 @@
 #define ADAPTER_XIAOMI_PD_45W     0x0e
 #define ADAPTER_XIAOMI_PD_60W     0x0f
 
-
 #define NORMAL_MODE 0x1
 #define TAPER_MODE  0x2
 #define FULL_MODE   0x3

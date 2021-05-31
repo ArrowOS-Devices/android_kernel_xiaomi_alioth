@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/debugfs.h>
@@ -673,6 +674,30 @@ static int smb5_parse_dt_misc(struct smb5 *chip, struct device_node *node)
 
 	chg->lpd_disabled = chg->lpd_disabled ||
 			of_property_read_bool(node, "qcom,lpd-disable");
+
+	chg->use_bq_pump = of_property_read_bool(node,
+				"mi,use-bq-pump");
+
+	chg->support_second_ffc_term_current = of_property_read_bool(node,
+				"mi,support-second-ffc-term-current");
+
+	chg->support_second_ffc_term_current_diff = SECOND_FFC_TERM_CURRENT_DIFF;
+	rc = of_property_read_u32(node, "mi,support-second-ffc-term-current-diff",
+			&chg->support_second_ffc_term_current_diff);
+	if (rc < 0)
+		pr_err("read mi,support-second-ffc-term-current-diff failed\n");
+
+	chg->ext_fg = of_property_read_bool(node,
+				"qcom,support-ext-fg");
+
+	chg->ext_bbc = of_property_read_bool(node,
+				"qcom,support-ext-bbc");
+
+	chg->support_wireless = of_property_read_bool(node,
+				"qcom,support-wireless");
+
+	chg->wireless_bq = of_property_read_bool(node,
+				"mi,bq-wireless");
 
 	chg->use_bq_pump = of_property_read_bool(node,
 				"mi,use-bq-pump");
